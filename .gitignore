@@ -1,0 +1,33 @@
+# Node.js
+node_modules/
+dist/
+release/
+npm-debug.log*
+
+# Android / Gradle (root "build/" holds icons and must stay tracked)
+.gradle/
+android/**/build/
+*.iml
+.idea/
+local.properties
+*.keystore
+*.jks
+
+# Generated / bundled binaries (build locally; see README)
+apk/
+platform-tools/
+Launch/
+
+# Editor / misc
+.vscode/
+out/
+.env
+.env.*
+*.tgz
+
+# Logs
+*.log
+
+# OS
+.DS_Store
+Thumbs.db

@@ -1,0 +1,719 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline';"
+    />
+    <title>Smart Capture</title>
+    <style>
+      :root {
+        color-scheme: dark;
+        font-family: "Segoe UI", "Yu Gothic UI", sans-serif;
+        font-size: 13px;
+        background: #000;
+        color: #f9fafb;
+      }
+
+      html,
+      body {
+        margin: 0;
+        height: 100%;
+        overflow: hidden;
+        background: #000;
+      }
+
+      #app {
+        position: relative;
+        display: flex;
+        flex-direction: column;
+        height: 100%;
+      }
+
+      #toolbar {
+        flex: 0 0 40px;
+        box-sizing: border-box;
+        display: flex;
+        align-items: center;
+        gap: 4px;
+        padding: 0 6px;
+        background: #111827;
+        -webkit-app-region: drag;
+        user-select: none;
+        z-index: 10;
+      }
+
+      #toolbar button,
+      #toolbar .no-drag {
+        -webkit-app-region: no-drag;
+      }
+
+      #toolbar .title {
+        padding: 0 6px;
+        font-weight: 600;
+      }
+
+      .spacer {
+        flex: 1;
+        min-width: 0;
+      }
+
+      button {
+        border: 0;
+        border-radius: 6px;
+        padding: 5px 9px;
+        background: #2563eb;
+        color: #fff;
+        font: inherit;
+        cursor: pointer;
+        white-space: nowrap;
+      }
+
+      button.secondary {
+        background: #374151;
+      }
+
+      button.on {
+        background: #059669;
+      }
+
+      button.recording {
+        background: #dc2626;
+      }
+
+      button:disabled {
+        opacity: 0.5;
+        cursor: default;
+      }
+
+      .win-button {
+        padding: 5px 8px;
+        background: transparent;
+      }
+
+      .win-button:hover {
+        background: #374151;
+      }
+
+      #close:hover {
+        background: #dc2626;
+      }
+
+      #stage {
+        position: relative;
+        flex: 1;
+        min-height: 0;
+        min-width: 0;
+        display: grid;
+        place-items: center;
+        overflow: hidden;
+        background: #000;
+      }
+
+      canvas {
+        width: auto;
+        height: auto;
+        max-width: 100%;
+        max-height: 100%;
+        object-fit: contain;
+        display: block;
+        background: #000;
+      }
+
+      .overlay {
+        position: absolute;
+        left: 8px;
+        padding: 3px 8px;
+        border-radius: 6px;
+        background: rgba(0, 0, 0, 0.6);
+        color: #e5e7eb;
+        pointer-events: none;
+      }
+
+      #status {
+        bottom: 8px;
+        max-width: calc(100% - 32px);
+      }
+
+      #record-timer {
+        top: 8px;
+        color: #f87171;
+        font-variant-numeric: tabular-nums;
+      }
+
+      /* ---- 画面モード: 待機画面 (view-idle) / キャプチャ画面 (view-active) ---- */
+      body.view-idle #stage,
+      body.view-idle .active-only,
+      body.view-active #idle {
+        display: none !important;
+      }
+
+      #idle {
+        flex: 1;
+        min-height: 0;
+        overflow-y: auto;
+        box-sizing: border-box;
+        padding: 14px 16px 48px;
+        display: grid;
+        align-content: start;
+        gap: 12px;
+        background: #0b1220;
+      }
+
+      #idle h1 {
+        margin: 0;
+        font-size: 16px;
+      }
+
+      .device-row {
+        display: flex;
+        gap: 6px;
+      }
+
+      #connection-mode {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 6px;
+      }
+
+      #connection-mode button.selected {
+        background: #2563eb;
+        outline: 1px solid #60a5fa;
+      }
+
+      .device-panel[hidden] {
+        display: none;
+      }
+
+      #device {
+        flex: 1;
+        min-width: 0;
+        background: #1f2937;
+        color: inherit;
+        border: 1px solid #4b5563;
+        border-radius: 6px;
+        padding: 6px;
+        font: inherit;
+      }
+
+      #wifi-connect-form {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto;
+        gap: 6px;
+      }
+
+      #wifi-address {
+        min-width: 0;
+        background: #1f2937;
+        color: inherit;
+        border: 1px solid #4b5563;
+        border-radius: 6px;
+        padding: 6px;
+        font: inherit;
+      }
+
+      #wifi-note {
+        grid-column: 1 / -1;
+        margin: 0;
+        color: #9ca3af;
+        font-size: 11px;
+      }
+
+      /* ---- モード別おすすめカード ---- */
+      .mode-card {
+        margin: 8px 0;
+        padding: 10px 12px;
+        border: 1px solid #374151;
+        border-radius: 8px;
+        background: #111827;
+        color: #d1d5db;
+        font-size: 12px;
+        line-height: 1.5;
+        animation: mode-card-in 0.18s ease-out;
+      }
+
+      .mode-card[hidden] {
+        display: none;
+      }
+
+      .mode-card.recommended {
+        border-color: #2563eb;
+      }
+
+      .mode-card h3 {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        margin: 0 0 6px;
+        font-size: 13px;
+        color: #f3f4f6;
+      }
+
+      .mode-card .badge {
+        padding: 1px 7px;
+        border-radius: 999px;
+        background: #2563eb;
+        color: #fff;
+        font-size: 10px;
+        font-weight: 600;
+      }
+
+      .mode-card dl {
+        margin: 0;
+      }
+
+      .mode-card dt {
+        margin-top: 4px;
+        color: #9ca3af;
+        font-size: 11px;
+      }
+
+      .mode-card dd {
+        margin: 0;
+      }
+
+      .ios-note {
+        padding: 0;
+        animation: none;
+      }
+
+      .ios-note > summary {
+        padding: 8px 12px;
+        font-size: 12px;
+        font-weight: 600;
+        color: #f3f4f6;
+        cursor: pointer;
+        list-style: none;
+      }
+
+      .ios-note > summary::-webkit-details-marker {
+        display: none;
+      }
+
+      .ios-note > summary::before {
+        content: "▸";
+        display: inline-block;
+        margin-right: 6px;
+        color: #9ca3af;
+        transition: transform 0.15s;
+      }
+
+      .ios-note[open] > summary::before {
+        transform: rotate(90deg);
+      }
+
+      .ios-note p {
+        margin: 0 12px 8px;
+      }
+
+      .ios-note .warn {
+        padding: 6px 8px;
+        border-left: 3px solid #f59e0b;
+        border-radius: 4px;
+        background: #1f2937;
+      }
+
+      .ios-note .hint {
+        color: #9ca3af;
+        font-size: 11px;
+      }
+
+      @keyframes mode-card-in {
+        from {
+          opacity: 0;
+          transform: translateY(-3px);
+        }
+        to {
+          opacity: 1;
+          transform: none;
+        }
+      }
+
+      /* ---- 接続ガイド (折りたたみ) ---- */
+      .connection-guide-card {
+        border: 1px solid #374151;
+        border-radius: 8px;
+        background: #111827;
+        color: #d1d5db;
+      }
+
+      .connection-guide-card > summary {
+        padding: 8px 12px;
+        cursor: pointer;
+        font-weight: 600;
+        list-style: none;
+        user-select: none;
+      }
+
+      .connection-guide-card > summary::-webkit-details-marker {
+        display: none;
+      }
+
+      .connection-guide-card > summary::before {
+        content: "▸";
+        display: inline-block;
+        width: 1.2em;
+        color: #9ca3af;
+        transition: transform 0.15s;
+      }
+
+      .connection-guide-card[open] > summary::before {
+        transform: rotate(90deg);
+      }
+
+      .connection-guide-body {
+        padding: 0 12px 12px;
+        display: grid;
+        gap: 10px;
+      }
+
+      .guide-compare {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 8px;
+      }
+
+      .guide-option {
+        padding: 8px 10px;
+        border-radius: 6px;
+        background: #1f2937;
+      }
+
+      .guide-option h3,
+      .connection-guide-body h3 {
+        margin: 0 0 4px;
+        font-size: 12px;
+        color: #f9fafb;
+      }
+
+      .guide-option ul {
+        margin: 0;
+        padding-left: 1.2em;
+        font-size: 11px;
+        line-height: 1.6;
+      }
+
+      .guide-option .tag {
+        color: #34d399;
+      }
+
+      .guide-option .warn {
+        color: #fbbf24;
+      }
+
+      .help-steps {
+        margin: 0;
+        padding: 0;
+        list-style: none;
+        counter-reset: step;
+        display: grid;
+        gap: 6px;
+      }
+
+      .help-steps li {
+        counter-increment: step;
+        position: relative;
+        padding-left: 28px;
+        font-size: 12px;
+        line-height: 1.5;
+      }
+
+      .help-steps li::before {
+        content: counter(step);
+        position: absolute;
+        left: 0;
+        top: 1px;
+        width: 20px;
+        height: 20px;
+        border-radius: 50%;
+        background: #2563eb;
+        color: #fff;
+        font-size: 11px;
+        font-weight: 600;
+        text-align: center;
+        line-height: 20px;
+      }
+
+      .help-steps code {
+        padding: 1px 4px;
+        border-radius: 4px;
+        background: #0b1220;
+        font-size: 11px;
+        user-select: all;
+      }
+
+      .guide-note {
+        margin: 0;
+        font-size: 11px;
+        color: #9ca3af;
+      }
+
+      #thumb-wrap {
+        position: relative;
+        height: 260px;
+        border-radius: 8px;
+        background: #000;
+        border: 1px solid #374151;
+        overflow: hidden;
+      }
+
+      #thumb-wrap canvas {
+        width: 100%;
+        height: 100%;
+        object-fit: contain;
+      }
+
+      #thumb-empty {
+        position: absolute;
+        inset: 0;
+        display: grid;
+        place-items: center;
+        padding: 12px;
+        text-align: center;
+        color: #9ca3af;
+        pointer-events: none;
+      }
+
+      #thumb-wrap.live #thumb-empty {
+        display: none;
+      }
+
+      #thumb-badge {
+        position: absolute;
+        top: 6px;
+        left: 6px;
+        padding: 2px 8px;
+        border-radius: 6px;
+        background: rgba(5, 150, 105, 0.9);
+        font-size: 11px;
+        display: none;
+      }
+
+      #thumb-wrap.live #thumb-badge {
+        display: block;
+      }
+
+      #connect {
+        padding: 10px;
+        font-size: 15px;
+        font-weight: 600;
+      }
+
+      #connect.waiting {
+        background: #b45309;
+      }
+
+      #settings-panel {
+        padding: 12px;
+        border-radius: 8px;
+        background: #1f2937;
+        display: grid;
+        gap: 10px;
+      }
+
+      #settings-panel label {
+        display: grid;
+        grid-template-columns: 1fr auto;
+        align-items: center;
+        gap: 8px;
+      }
+
+      #settings-panel select {
+        background: #111827;
+        color: inherit;
+        border: 1px solid #4b5563;
+        border-radius: 4px;
+        padding: 3px;
+        font: inherit;
+      }
+
+      #settings-note {
+        margin: 0;
+        color: #9ca3af;
+        font-size: 11px;
+      }
+
+      /* キャプチャモード・全画面: 操作 UI は普段非表示で、マウスを動かした時だけ重ねて表示する */
+      body.autohide #toolbar {
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        background: rgba(17, 24, 39, 0.85);
+        display: none;
+      }
+
+      body.autohide.show-ui #toolbar {
+        display: flex;
+      }
+
+      body.capture #status,
+      body.capture #record-timer {
+        display: none !important;
+      }
+
+      body.fullscreen .win-button {
+        display: none;
+      }
+
+      body.autohide:not(.show-ui) {
+        cursor: none;
+      }
+    </style>
+  </head>
+  <body class="view-idle">
+    <div id="app">
+      <div id="toolbar">
+        <span class="title">Smart Capture</span>
+        <button id="disconnect" type="button" class="active-only" title="切断して待機画面へ戻る">◀ 切断</button>
+        <button id="record" type="button" class="secondary active-only" disabled>録画</button>
+        <button id="fullscreen" type="button" class="secondary active-only">全画面</button>
+        <button id="capture" type="button" class="secondary active-only" aria-pressed="false" title="OBS向け (Ctrl+Shift+C)">OBS</button>
+        <button id="stretch" type="button" class="secondary active-only" aria-pressed="false" aria-label="横向き映像を1920×1080に引き伸ばす" title="横向き時のみ1920×1080 (16:9) に引き伸ばします">16:9</button>
+        <button id="always-on-top" type="button" class="secondary" aria-pressed="false">手前固定</button>
+        <span class="spacer"></span>
+        <button id="minimize" type="button" class="win-button" aria-label="最小化">−</button>
+        <button id="maximize" type="button" class="win-button" aria-label="最大化">□</button>
+        <button id="close" type="button" class="win-button" aria-label="閉じる">✕</button>
+      </div>
+
+      <!-- モードA: 待機画面 (端末選択 / サムネイル / 設定 / 接続) -->
+      <main id="idle">
+        <h1>端末を選んで接続</h1>
+        <div id="connection-mode" role="group" aria-label="接続方式">
+          <button id="mode-usb" type="button" class="selected" aria-pressed="true">USB接続</button>
+          <button id="mode-wifi" type="button" class="secondary" aria-pressed="false">Wi-Fi接続</button>
+        </div>
+        <section id="mode-card-usb" class="mode-card recommended" aria-live="polite">
+          <h3>⚡ USB接続 <span class="badge">おすすめ</span></h3>
+          <dl>
+            <dt>おすすめの利用シーン</dt>
+            <dd>本格的なOBS配信や、遅延を減らしてアクションゲーム等をプレイしたい時</dd>
+            <dt>特徴・メリット</dt>
+            <dd>超低遅延・コマ落ちなし、給電しながら長時間安定</dd>
+          </dl>
+        </section>
+        <section id="mode-card-wifi" class="mode-card" aria-live="polite" hidden>
+          <h3>📡 Wi-Fi接続</h3>
+          <dl>
+            <dt>おすすめの利用シーン</dt>
+            <dd>ケーブルを繋がず、手軽にスマホの画面を手元で動かしたい時</dd>
+            <dt>特徴・メリット</dt>
+            <dd>デスク周りがスッキリ<br />※同一Wi-Fiへの接続が必要</dd>
+          </dl>
+        </section>
+
+        <details id="ios-note" class="mode-card ios-note">
+          <summary>🍎 iPhone / iPad (USB接続)</summary>
+          <p>USB接続によるデバイス検出および<strong>画面ミラーリング(実験的)</strong>に対応しています。映像のみで、音声は未対応です。</p>
+          <p class="warn">iOSの仕様上、<strong>端末の「信頼」</strong>と、PC側で<strong>WinUSBドライバーの導入</strong>(Zadig等)が必要です。ドライバー導入後は iTunes から端末が見えなくなる場合があります。</p>
+          <p class="hint">端末を選択して「接続」を押すと開始します。ロック解除した状態でお試しください。</p>
+        </details>
+
+        <details id="connection-guide" class="connection-guide-card">
+          <summary>USBとWi-Fiの選び方 / Wi-Fi接続の手順</summary>
+          <div class="connection-guide-body">
+            <div class="guide-compare">
+              <section class="guide-option">
+                <h3>🔌 USB接続</h3>
+                <ul>
+                  <li><span class="tag">安定</span>: 遅延・コマ落ちが少ない</li>
+                  <li><span class="tag">簡単</span>: ケーブルを挿すだけ</li>
+                  <li><span class="tag">充電</span>: 配信しながら充電できる</li>
+                  <li><span class="warn">注意</span>: ケーブルの長さに縛られる</li>
+                </ul>
+              </section>
+              <section class="guide-option">
+                <h3>📶 Wi-Fi接続</h3>
+                <ul>
+                  <li><span class="tag">自由</span>: ケーブル不要で端末を動かせる</li>
+                  <li><span class="warn">設定</span>: 初回にペア設定が必要 (Android 11以降)</li>
+                  <li><span class="warn">回線</span>: 電波状況で映像が乱れることがある</li>
+                  <li><span class="warn">条件</span>: PCとスマホを同じネットワークに</li>
+                </ul>
+              </section>
+            </div>
+            <p class="guide-note">配信・録画を優先するならUSB、手軽に離れて使いたいときはWi-Fiがおすすめです。</p>
+            <div>
+              <h3>Wi-Fi接続の4ステップ</h3>
+              <ol class="help-steps">
+                <li>PCとスマホを<strong>同じWi-Fi</strong>に接続します。</li>
+                <li>スマホの「開発者向けオプション」で<strong>「ワイヤレスデバッグ」をON</strong>にします。</li>
+                <li>初回のみ、「ペアリングコードによるデバイスのペア設定」を開き、PCで <code>adb pair IP:ポート</code> を実行して表示されたコードを入力します。</li>
+                <li>上の「Wi-Fi接続」タブを選び、検出された端末を選んで<strong>「接続」</strong>を押します。見つからない場合は、手動入力欄に「ワイヤレスデバッグ」画面の IP:ポート を入力してください。</li>
+              </ol>
+            </div>
+            <p class="guide-note">Android 10以下: 一度USB接続して <code>adb tcpip 5555</code> を実行すると、Wi-Fiで接続できます。</p>
+          </div>
+        </details>
+        <section id="usb-device-panel" class="device-panel">
+          <div class="device-row">
+            <select id="device" title="接続する端末" aria-label="接続する端末"></select>
+            <button id="rescan" type="button" class="secondary" title="端末を再検索">再検索</button>
+          </div>
+        </section>
+        <section id="wifi-device-panel" class="device-panel" hidden>
+          <div class="device-row">
+            <select id="wifi-device" title="検出されたWi-Fi端末" aria-label="検出されたWi-Fi端末"></select>
+            <button id="rescan-wifi" type="button" class="secondary" title="Wi-Fi端末を再検索">再検索</button>
+          </div>
+          <form id="wifi-connect-form">
+            <input
+              id="wifi-address"
+              type="text"
+              inputmode="decimal"
+              autocomplete="off"
+              spellcheck="false"
+              placeholder="192.168.1.10:5555"
+              aria-label="スマホの IP アドレスとポート"
+            />
+            <button id="wifi-connect" type="submit" class="secondary">手動接続</button>
+            <p id="wifi-note">Android の「ワイヤレスデバッグ」に表示された IP とポートを入力します。初回は事前のペア設定が必要です。</p>
+          </form>
+        </section>
+        <div id="thumb-wrap">
+          <canvas id="thumb" width="180" height="320"></canvas>
+          <span id="thumb-badge">● プレビュー</span>
+          <div id="thumb-empty">端末を選択し、スマホで「ミラーリング開始」を押すと<br />ここにプレビューが表示されます</div>
+        </div>
+        <div id="settings-panel">
+          <label>解像度
+            <select id="set-resolution">
+              <option value="1920">1080p</option>
+              <option value="1280">720p</option>
+              <option value="0">スマホ原寸</option>
+            </select>
+          </label>
+          <label>フレームレート
+            <select id="set-fps">
+              <option value="60">60 fps</option>
+              <option value="30">30 fps</option>
+            </select>
+          </label>
+          <label>ビットレート
+            <select id="set-bitrate">
+              <option value="8000000">8 Mbps</option>
+              <option value="4000000">4 Mbps</option>
+              <option value="2000000">2 Mbps</option>
+            </select>
+          </label>
+          <label>スマホを消音
+            <input id="set-mute" type="checkbox" />
+          </label>
+          <p id="settings-note">設定は「接続」時に反映されます。プレビューは軽量設定で表示します。</p>
+        </div>
+        <button id="connect" type="button">接続</button>
+      </main>
+
+      <!-- モードB: キャプチャ画面 -->
+      <div id="stage">
+        <canvas id="screen" width="360" height="640"></canvas>
+        <span id="record-timer" class="overlay" role="timer" hidden>● REC 00:00:00</span>
+      </div>
+      <span id="status" class="overlay" role="status" aria-live="polite">アプリを起動しています…</span>
+    </div>
+    <script src="./dist/renderer.js"></script>
+  </body>
+</html>

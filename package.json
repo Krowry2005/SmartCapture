@@ -1,0 +1,105 @@
+{
+  "name": "smart-capture",
+  "productName": "Smart Capture",
+  "version": "0.4.0",
+  "private": true,
+  "description": "Low-latency Android screen and audio mirroring/capture over USB for Windows",
+  "license": "MIT",
+  "keywords": [
+    "android",
+    "screen-mirroring",
+    "scrcpy-alternative",
+    "obs",
+    "electron",
+    "usb"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Krowry2005/SmartCapture.git"
+  },
+  "bugs": {
+    "url": "https://github.com/Krowry2005/SmartCapture/issues"
+  },
+  "homepage": "https://github.com/Krowry2005/SmartCapture#readme",
+  "main": "dist/main.js",
+  "scripts": {
+    "build": "tsc -p tsconfig.json && esbuild src/renderer.ts --bundle --platform=browser --target=es2022 --outfile=dist/renderer.js",
+    "start": "npm run build && electron .",
+    "dist": "npm run build && electron-builder --win nsis portable",
+    "package": "npm run dist",
+    "dist:portable": "npm run build && electron-builder --win portable",
+    "dist:installer": "npm run build && electron-builder --win nsis"
+  },
+  "author": "Krowry2005",
+  "build": {
+    "appId": "com.smartcapture.desktop",
+    "productName": "Smart Capture",
+    "executableName": "SmartCapture",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "dist/**/*",
+      "index.html",
+      "package.json"
+    ],
+    "extraResources": [
+      {
+        "from": "apk/app-debug.apk",
+        "to": "app-debug.apk"
+      },
+      {
+        "from": "build/icon.png",
+        "to": "icon.png"
+      },
+      {
+        "from": "platform-tools",
+        "to": "platform-tools",
+        "filter": [
+          "adb.exe",
+          "AdbWinApi.dll",
+          "AdbWinUsbApi.dll"
+        ]
+      }
+    ],
+    "win": {
+      "icon": "build/icon.ico",
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        },
+        {
+          "target": "portable",
+          "arch": [
+            "x64"
+          ]
+        }
+      ]
+    },
+    "nsis": {
+      "oneClick": true,
+      "perMachine": false,
+      "artifactName": "SmartCapture-Setup.${ext}"
+    },
+    "portable": {
+      "artifactName": "SmartCapture.${ext}"
+    }
+  },
+  "devDependencies": {
+    "@types/node": "^22.15.30",
+    "electron": "^36.3.2",
+    "electron-builder": "^26.0.12",
+    "esbuild": "^0.25.5",
+    "typescript": "^5.8.3"
+  },
+  "allowScripts": {
+    "electron@36.9.5": true,
+    "esbuild@0.25.12": true
+  },
+  "dependencies": {
+    "usb": "^2.19.1"
+  }
+}
